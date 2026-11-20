@@ -23,8 +23,19 @@ that is not ours. So the link is checked the way they will open it, not only fro
    ```
 
 2. Ask the human before it goes up: what, why, where, who can see it, how to undo it.
-3. Upload it to the public host (any bucket or static host). Keep the URL: clean-up uploads
-   over the same link.
+3. Put it on the public host (any bucket or static host) and keep the URL: clean-up uploads
+   over the same link. The routine has two commands, one up and one down (read `--help` for the
+   flags, don't guess them). With the AWS CLI and an S3 bucket that serves public reads:
+
+   ```sh
+   # put: the link is https://<bucket>.s3.dualstack.<region>.amazonaws.com/<key>
+   aws s3 cp <outside-dir>/digest.html s3://<bucket>/<key> --content-type text/html --cache-control no-cache
+   # take down: the link answers 403/404 afterwards
+   aws s3 rm s3://<bucket>/<key>
+   ```
+
+   Another host: write its put and take-down commands here. A link you can't take down is not a
+   preview host.
 4. **Check before sending**, with the saved file and the marker in the environment:
 
    ```sh

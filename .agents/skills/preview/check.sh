@@ -36,22 +36,31 @@ fi
 
 # 5. opens from outside: public check nodes on other networks (check-host.net)
 nodes=${NODES:-5}
-req=$(curl -sS -H 'Accept: application/json' "https://check-host.net/check-http?host=$url&max_nodes=$nodes") || req=""
-id=$(python3 -Ic 'import json,sys; print(json.loads(sys.stdin.read() or "{}").get("request_id",""))' <<<"$req" 2>/dev/null)
-if [[ -z $id ]]; then fail "outside check could not start"
-else
+outside() {   # one round on check-host.net; prints "<ok>/<all> node=status ..."
+  local req id res
+  req=$(curl -sS -H 'Accept: application/json' "https://check-host.net/check-http?host=$url&max_nodes=$nodes") || return 1
+  id=$(python3 -Ic 'import json,sys; print(json.loads(sys.stdin.read() or "{}").get("request_id",""))' <<<"$req" 2>/dev/null)
+  [[ -n $id ]] || return 1
   sleep 8
-  res=$(curl -sS -H 'Accept: application/json' "https://check-host.net/check-result/$id")
-  summary=$(python3 -Ic '
+  res=$(curl -sS -H 'Accept: application/json' "https://check-host.net/check-result/$id") || return 1
+  python3 -Ic '
 import json,sys
 r=json.loads(sys.stdin.read()); good=0; lines=[]
 for node,v in r.items():
     st = v[0][3] if v and v[0] and len(v[0])>3 else "no answer"
     good += str(st) == "200";lines.append(node.split(".")[0] + "=" + str(st))
-print(f"{good}/{len(r)} " + " ".join(sorted(lines)))' <<<"$res")
-  n_ok=${summary%%/*}; rest=${summary#*/}; n_all=${rest%% *}
-  [[ $n_all -gt 0 && $n_ok == "$n_all" ]] && ok "opens from outside: $summary" || fail "outside: $summary"
+print(f"{good}/{len(r)} " + " ".join(sorted(lines)))' <<<"$res"
+}
+# a node that does not answer is the check service, not the link: one more round on new nodes
+pass_outside() { local n_ok=${1%%/*} rest=${1#*/}; local n_all=${rest%% *}; [[ $n_all -gt 0 && $n_ok == "$n_all" ]]; }
+summary=$(outside) || summary=""
+if [[ -z $summary ]] || ! pass_outside "$summary"; then
+  bad=$(tr ' ' '\n' <<<"${summary#* }" | grep -vE '=200$' | grep -E '=[0-9]{3}$' || true)
+  if [[ -z $bad ]]; then first=$summary; summary=$(outside) || summary=""; [[ -n $first ]] && summary="$summary (retry; first round: $first)"; fi
 fi
+if [[ -z $summary ]]; then fail "outside check could not start"
+elif pass_outside "$summary"; then ok "opens from outside: $summary"
+else fail "outside: $summary"; fi
 
 echo "preview check · $(date -u +%FT%TZ) · $url · mode $mode"
 printf '%s\n' "${out[@]}"
