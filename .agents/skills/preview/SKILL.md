@@ -13,6 +13,9 @@ that is not ours. So the link is checked the way they will open it, not only fro
 - The reviewer, from any network, with a browser. No login, no VPN, no lane.
 - Anyone else who gets the link: it is public. So the page holds only the template's sample
   data and the lane marker, nothing else (ADR 0003, brief).
+- Nobody else gets the link. The reviewer is the first to open it: it goes only into the send
+  to the reviewer, never into an issue, comment, PR, commit or chat. A link that was posted
+  anywhere is burnt: put the page under a new key, don't reuse it.
 
 ## Steps
 
@@ -44,7 +47,7 @@ that is not ours. So the link is checked the way they will open it, not only fro
 
    It checks: a real HTTPS host (not an IP, not localhost) · 200 `text/html` · the bytes on the
    link are the saved file · self-contained (no script, no outside resources) · the marker is
-   there · **the link opens from outside**: several public check nodes in other countries
+   there · the link is not published (repo, history, issues, PRs, comments) · **the link opens from outside**: several public check nodes in other countries
    fetch it and must all get 200. It prints an evidence block; nothing is sent if it fails.
 
    **The harness runs it, not only the agent:** `gate.sh` takes the send on stdin, renders the
@@ -53,7 +56,7 @@ that is not ours. So the link is checked the way they will open it, not only fro
    `.claude/settings.json` (PreToolUse on the claim). Another harness: call `gate.sh` the same way
    from its own hook or extension. Don't copy the check.
 5. Send the reviewer the link and the plan's issues. Post the evidence block on the preview
-   issue. Close it (AGENTS.md closing comment, `commit: none`) only once its "Done when" holds.
+   issue: it names the host, never the link (`check.sh` prints `<preview link>`). Close it (AGENTS.md closing comment, `commit: none`) only once its "Done when" holds.
 
 ## Clean up (once the review is in)
 
@@ -67,3 +70,5 @@ that is not ours. So the link is checked the way they will open it, not only fro
 - Don't send a link this check did not pass.
 - Don't commit the saved page, and don't attach it to an issue or chat.
 - Don't print the marker in logs or comments.
+- Don't post the link anywhere but the send: `check.sh` fails a link found in the repo, its
+  history, its issues, PRs or comments.

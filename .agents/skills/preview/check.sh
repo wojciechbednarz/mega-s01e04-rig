@@ -34,15 +34,39 @@ else
   [[ -n ${LANE_MARKER:-} ]] && grep -qF "$LANE_MARKER" "$tmp" && fail "old marker still on the page"
 fi
 
-# 5. opens from outside: public check nodes on other networks (check-host.net)
+# 5. the link is not published: only the reviewer gets it (ADR 0003: no previews in the repo or in issues)
+key=$(sed -E 's#^https://##; s#[?#].*##' <<<"$url")   # host + path, so a generic file name alone does not match
+root=$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)
+seen=()
+if [[ -n $root ]]; then
+  git -C "$root" grep -qF "$key" 2>/dev/null && seen+=("repo tree")
+  [[ -n $(git -C "$root" log --all -S"$key" --format=%h 2>/dev/null) ]] && seen+=("git history")
+  repo=$(cd "$root" && gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
+  if [[ -n $repo ]]; then
+    texts=$(gh api --paginate "repos/$repo/issues?state=all&per_page=100" -q '.[] | (.title + " " + (.body // ""))' 2>/dev/null
+            gh api --paginate "repos/$repo/issues/comments?per_page=100" -q '.[].body' 2>/dev/null
+            gh api --paginate "repos/$repo/pulls/comments?per_page=100" -q '.[].body' 2>/dev/null) \
+      || texts=""
+    grep -qF "$key" <<<"$texts" && seen+=("issues, PRs or comments of $repo")
+  else seen+=("(could not read the repo's issues)"); fi
+else seen+=("(not in a git repo)"); fi
+if [[ ${#seen[@]} -eq 0 ]]; then ok "link not published (repo tree, git history, issues, PRs, comments)"
+else fail "link is published or unchecked: ${seen[*]}"; fi
+
+# 6. opens from outside: public check nodes on other networks (check-host.net)
 nodes=${NODES:-5}
 outside() {   # one round on check-host.net; prints "<ok>/<all> node=status ..."
   local req id res
   req=$(curl -sS -H 'Accept: application/json' "https://check-host.net/check-http?host=$url&max_nodes=$nodes") || return 1
   id=$(python3 -Ic 'import json,sys; print(json.loads(sys.stdin.read() or "{}").get("request_id",""))' <<<"$req" 2>/dev/null)
   [[ -n $id ]] || return 1
-  sleep 8
-  res=$(curl -sS -H 'Accept: application/json' "https://check-host.net/check-result/$id") || return 1
+  local waited=0   # nodes can take 20-30 s to answer: poll until none is pending, at most 36 s
+  while :; do
+    sleep 4; waited=$((waited+4))
+    res=$(curl -sS -H 'Accept: application/json' "https://check-host.net/check-result/$id") || return 1
+    grep -q ':null' <<<"$res" || break
+    [[ $waited -ge 36 ]] && break
+  done
   python3 -Ic '
 import json,sys
 r=json.loads(sys.stdin.read()); good=0; lines=[]
@@ -62,6 +86,6 @@ if [[ -z $summary ]]; then fail "outside check could not start"
 elif pass_outside "$summary"; then ok "opens from outside: $summary"
 else fail "outside: $summary"; fi
 
-echo "preview check · $(date -u +%FT%TZ) · $url · mode $mode"
+echo "preview check · $(date -u +%FT%TZ) · <preview link> on $host · mode $mode"
 printf '%s\n' "${out[@]}"
 [[ $fails -eq 0 ]] && echo "PASS" || { echo "FAIL ($fails)"; exit 1; }
