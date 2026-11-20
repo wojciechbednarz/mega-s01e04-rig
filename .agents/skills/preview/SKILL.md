@@ -35,6 +35,12 @@ that is not ours. So the link is checked the way they will open it, not only fro
    link are the saved file · self-contained (no script, no outside resources) · the marker is
    there · **the link opens from outside**: several public check nodes in other countries
    fetch it and must all get 200. It prints an evidence block; nothing is sent if it fails.
+
+   **The harness runs it, not only the agent:** `gate.sh` takes the send on stdin, renders the
+   page fresh (`render.ts`, no server), runs `check.sh` and blocks the send (exit 2) on FAIL; on
+   PASS it shows the human the evidence and asks before the send. Claude Code wires it in
+   `.claude/settings.json` (PreToolUse on the claim). Another harness: call `gate.sh` the same way
+   from its own hook or extension. Don't copy the check.
 5. Send the reviewer the link and the plan's issues. Post the evidence block on the preview
    issue. Close it (AGENTS.md closing comment, `commit: none`) only once its "Done when" holds.
 
